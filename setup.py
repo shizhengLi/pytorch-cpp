@@ -55,8 +55,8 @@ class CMakeBuild(build_ext):
 setup(
     name='pytorchcpp',
     version='0.1.0',
-    author='LISHIZHENG',
-    author_email='lishizheng@example.com',
+    author='Shizheng Li',
+    author_email='shizhengcs@gmail.com',
     description='PyTorchCPP: A lightweight deep learning library in C++',
     long_description='',
     ext_modules=[CMakeExtension('pytorchcpp')],
