@@ -1,6 +1,7 @@
 #include <pytorchcpp/nn.h>
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
 
 namespace pytorchcpp {
 namespace nn {
@@ -9,21 +10,51 @@ namespace nn {
 MSELoss::MSELoss() = default;
 
 Variable MSELoss::forward(const Variable& input, const Variable& target) {
-    // 检查形状
+    std::cout << "MSELoss::forward - 输入形状检查:" << std::endl;
     auto input_shape = input.data().shape();
     auto target_shape = target.data().shape();
     
+    std::cout << "  输入形状: [";
+    for (size_t i = 0; i < input_shape.size(); ++i) {
+        std::cout << input_shape[i];
+        if (i < input_shape.size() - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
+    
+    std::cout << "  目标形状: [";
+    for (size_t i = 0; i < target_shape.size(); ++i) {
+        std::cout << target_shape[i];
+        if (i < target_shape.size() - 1) std::cout << ", ";
+    }
+    std::cout << "]" << std::endl;
+    
+    // 检查形状
     if (input_shape != target_shape) {
         throw std::invalid_argument("Input and target shapes must match for MSE loss");
     }
     
-    // 计算平方差
-    auto diff = input - target;
-    auto squared_diff = diff * diff;
+    // 计算每个元素的差值
+    std::cout << "MSELoss::forward - 计算差值..." << std::endl;
+    auto input_data = input.data();
+    auto target_data = target.data();
     
-    // 计算平均值
-    auto loss = squared_diff.data().mean();
-    return Variable(loss, input.requires_grad() || target.requires_grad());
+    size_t num_elements = input_data.numel();
+    std::cout << "  元素数量: " << num_elements << std::endl;
+    
+    // 手动计算MSE
+    float sum_squared_error = 0.0f;
+    
+    for (size_t i = 0; i < num_elements; ++i) {
+        float diff = input_data[i] - target_data[i];
+        sum_squared_error += diff * diff;
+    }
+    
+    float mean_squared_error = sum_squared_error / num_elements;
+    std::cout << "  计算得到MSE: " << mean_squared_error << std::endl;
+    
+    // 创建并返回标量损失
+    return Variable(Tensor({1}, {mean_squared_error}, false), 
+                   input.requires_grad() || target.requires_grad());
 }
 
 Variable MSELoss::forward(const Variable& input) {

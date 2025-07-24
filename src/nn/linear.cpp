@@ -56,7 +56,35 @@ Variable Linear::forward(const Variable& input) {
     
     // 如果有偏置，则添加
     if (has_bias_) {
-        output = output + bias_;
+        // 修复：确保偏置的形状与输出匹配，通过广播机制添加偏置
+        // 获取输出形状以确定批量大小
+        auto output_shape = output.data().shape();
+        
+        if (output_shape.size() == 2) {
+            // 批量输入情况：[batch_size, out_features]
+            size_t batch_size = output_shape[0];
+            
+            // 创建与输出形状匹配的偏置张量，通过复制偏置到每个批次样本
+            std::vector<float> expanded_bias_data;
+            expanded_bias_data.reserve(batch_size * out_features_);
+            
+            // 为每个批次样本复制偏置
+            for (size_t i = 0; i < batch_size; ++i) {
+                for (size_t j = 0; j < out_features_; ++j) {
+                    expanded_bias_data.push_back(bias_.data()[j]);
+                }
+            }
+            
+            // 创建广播后的偏置变量
+            Tensor expanded_bias(output_shape, expanded_bias_data, bias_.requires_grad());
+            Variable bias_broadcasted(expanded_bias, bias_.requires_grad());
+            
+            // 添加广播后的偏置
+            output = output + bias_broadcasted;
+        } else {
+            // 单个样本情况：直接添加偏置
+            output = output + bias_;
+        }
     }
     
     return output;
