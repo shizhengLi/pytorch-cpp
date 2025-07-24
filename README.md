@@ -26,7 +26,7 @@ PyTorchCPP是一个轻量级深度学习框架，使用C++实现PyTorch核心功
 
 ```bash
 # 克隆仓库
-git clone https://github.com/yourusername/pytorch-cpp.git
+git clone https://github.com/shizhengLi/pytorch-cpp.git
 cd pytorch-cpp
 
 # 创建构建目录
