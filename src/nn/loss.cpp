@@ -10,23 +10,8 @@ namespace nn {
 MSELoss::MSELoss() = default;
 
 Variable MSELoss::forward(const Variable& input, const Variable& target) {
-    std::cout << "MSELoss::forward - 输入形状检查:" << std::endl;
     auto input_shape = input.data().shape();
     auto target_shape = target.data().shape();
-    
-    std::cout << "  输入形状: [";
-    for (size_t i = 0; i < input_shape.size(); ++i) {
-        std::cout << input_shape[i];
-        if (i < input_shape.size() - 1) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
-    
-    std::cout << "  目标形状: [";
-    for (size_t i = 0; i < target_shape.size(); ++i) {
-        std::cout << target_shape[i];
-        if (i < target_shape.size() - 1) std::cout << ", ";
-    }
-    std::cout << "]" << std::endl;
     
     // 检查形状
     if (input_shape != target_shape) {
@@ -34,12 +19,10 @@ Variable MSELoss::forward(const Variable& input, const Variable& target) {
     }
     
     // 计算每个元素的差值
-    std::cout << "MSELoss::forward - 计算差值..." << std::endl;
     auto input_data = input.data();
     auto target_data = target.data();
     
     size_t num_elements = input_data.numel();
-    std::cout << "  元素数量: " << num_elements << std::endl;
     
     // 手动计算MSE
     float sum_squared_error = 0.0f;
@@ -50,7 +33,6 @@ Variable MSELoss::forward(const Variable& input, const Variable& target) {
     }
     
     float mean_squared_error = sum_squared_error / num_elements;
-    std::cout << "  计算得到MSE: " << mean_squared_error << std::endl;
     
     // 创建并返回标量损失
     return Variable(Tensor({1}, {mean_squared_error}, false), 

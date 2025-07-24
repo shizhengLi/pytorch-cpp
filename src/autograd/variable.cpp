@@ -29,11 +29,9 @@ Variable::Variable() : pImpl(std::make_shared<Impl>()) {}
 
 Variable::Variable(const Tensor& data, bool requires_grad)
     : pImpl(std::make_shared<Impl>(data, requires_grad)) {
-    std::cout << "Variable::构造函数 - requires_grad: " << requires_grad << std::endl;
     // 确保grad被初始化为零张量
     if (requires_grad && pImpl->grad.numel() == 0) {
         pImpl->grad = Tensor::zeros(data.shape(), false);
-        std::cout << "Variable::构造函数 - 初始化梯度为零: " << pImpl->grad << std::endl;
     }
 }
 
@@ -88,42 +86,31 @@ void Variable::backward(const Tensor& grad) {
         }
     }
     
-    std::cout << "Variable::backward - 输入梯度: " << gradient << std::endl;
-    
     // 更新梯度
     pImpl->grad = pImpl->grad + gradient;
-    std::cout << "Variable::backward - 更新后梯度: " << pImpl->grad << std::endl;
     
     // 如果有梯度函数，则继续反向传播
     if (pImpl->grad_fn) {
-        std::cout << "Variable::backward - 调用梯度函数" << std::endl;
         auto grad_inputs = pImpl->grad_fn->backward(gradient);
         
         // 将计算出的梯度传递给输入变量
         const auto& input_vars = pImpl->grad_fn->get_inputs();
         
         for (size_t i = 0; i < input_vars.size(); ++i) {
-            std::cout << "Variable::backward - 处理输入 " << i << ", requires_grad: " << input_vars[i].requires_grad() << std::endl;
             if (i < grad_inputs.size() && input_vars[i].requires_grad()) {
                 // 不再需要const_cast，因为我们使用shared_ptr
                 auto& input_var = const_cast<Variable&>(input_vars[i]);
                 
                 // 累加梯度
                 if (input_var.pImpl->grad.numel() > 0) {
-                    std::cout << "Variable::backward - 输入 " << i << " 已有梯度: " << input_var.pImpl->grad << std::endl;
                     input_var.pImpl->grad = input_var.pImpl->grad + grad_inputs[i];
                 } else {
-                    std::cout << "Variable::backward - 输入 " << i << " 无梯度，设置为: " << grad_inputs[i] << std::endl;
                     input_var.pImpl->grad = grad_inputs[i];
                 }
-                std::cout << "Variable::backward - 输入 " << i << " 最终梯度: " << input_var.pImpl->grad << std::endl;
                 
                 // 继续向前传播梯度
                 if (input_var.pImpl->grad_fn) {
-                    std::cout << "Variable::backward - 继续为输入 " << i << " 反向传播" << std::endl;
                     input_var.backward(grad_inputs[i]);
-                } else {
-                    std::cout << "Variable::backward - 输入 " << i << " 没有梯度函数，停止传播" << std::endl;
                 }
             }
         }
