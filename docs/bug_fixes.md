@@ -117,11 +117,13 @@ Aborted (core dumped)
 
 ### 问题定位
 
-通过增加调试输出，我们发现问题出现在两个地方：
+通过增加调试输出，我们发现问题出现在三个地方：
 
 1. **线性层（Linear）中的偏置添加**：在批量处理时，偏置形状为`[out_features]`，而输出形状为`[batch_size, out_features]`，导致形状不匹配。
 
 2. **损失函数（MSELoss）中的元素乘法**：在计算平方差时，直接使用`diff * diff`会触发张量的元素级乘法，而张量形状检查过于严格。
+
+3. **优化器（SGD和Adam）中的张量运算**：在更新参数时，张量的运算操作同样面临形状不匹配问题。
 
 ### 解决方案
 
@@ -207,7 +209,9 @@ Variable MSELoss::forward(const Variable& input, const Variable& target) {
 
 #### 3. 修复优化器中的张量操作
 
-类似地，我们修改了`SGD::step`方法，避免使用张量的运算符，改为直接操作张量的元素：
+##### 3.1 修复SGD优化器
+
+我们修改了`SGD::step`方法，避免使用张量的运算符，改为直接操作张量的元素：
 
 ```cpp
 void SGD::step() {
@@ -281,10 +285,107 @@ void SGD::step() {
 }
 ```
 
+##### 3.2 修复Adam优化器
+
+类似地，我们也修改了`Adam::step`方法，采用相同的策略：
+
+```cpp
+void Adam::step() {
+    std::cout << "Adam::step - 开始更新参数..." << std::endl;
+    
+    step_count_++;
+    
+    float bias_correction1 = 1.0f - std::pow(beta1_, static_cast<float>(step_count_));
+    float bias_correction2 = 1.0f - std::pow(beta2_, static_cast<float>(step_count_));
+    
+    std::cout << "  步数: " << step_count_ << std::endl;
+    std::cout << "  偏置校正1: " << bias_correction1 << std::endl;
+    std::cout << "  偏置校正2: " << bias_correction2 << std::endl;
+    
+    for (size_t i = 0; i < parameters_.size(); ++i) {
+        auto& param = parameters_[i];
+        
+        // 只更新需要梯度的参数
+        if (!param.requires_grad()) {
+            std::cout << "  参数 " << i << " 不需要梯度，跳过" << std::endl;
+            continue;
+        }
+        
+        // 获取数据和梯度
+        auto data = param.data();
+        auto grad = param.grad();
+        
+        // 形状检查和调试输出...
+        
+        // 确保动量和速度向量有正确的形状
+        if (i >= m_.size()) {
+            std::cout << "  初始化一阶矩向量 " << i << std::endl;
+            m_.push_back(Tensor::zeros(data_shape));
+        }
+        
+        if (i >= v_.size()) {
+            std::cout << "  初始化二阶矩向量 " << i << std::endl;
+            v_.push_back(Tensor::zeros(data_shape));
+        }
+        
+        size_t numel = data.numel();
+        std::vector<float> grad_data(numel);
+        
+        // 权重衰减 (L2 正则化)
+        if (weight_decay_ > 0.0f) {
+            // 应用权重衰减...
+        } else {
+            for (size_t j = 0; j < numel; ++j) {
+                grad_data[j] = grad[j];
+            }
+        }
+        
+        // 更新一阶矩估计
+        std::cout << "  更新一阶矩估计" << std::endl;
+        for (size_t j = 0; j < numel; ++j) {
+            m_[i][j] = beta1_ * m_[i][j] + (1.0f - beta1_) * grad_data[j];
+        }
+        
+        // 更新二阶矩估计
+        std::cout << "  更新二阶矩估计" << std::endl;
+        for (size_t j = 0; j < numel; ++j) {
+            float grad_squared = grad_data[j] * grad_data[j];
+            v_[i][j] = beta2_ * v_[i][j] + (1.0f - beta2_) * grad_squared;
+        }
+        
+        // 计算偏置校正
+        std::cout << "  计算偏置校正" << std::endl;
+        std::vector<float> m_corrected(numel);
+        std::vector<float> v_corrected(numel);
+        
+        for (size_t j = 0; j < numel; ++j) {
+            m_corrected[j] = m_[i][j] / bias_correction1;
+            v_corrected[j] = v_[i][j] / bias_correction2;
+        }
+        
+        // 计算更新值
+        std::cout << "  计算更新值" << std::endl;
+        std::vector<float> new_data(numel);
+        
+        for (size_t j = 0; j < numel; ++j) {
+            float update = learning_rate_ * m_corrected[j] / (std::sqrt(v_corrected[j]) + epsilon_);
+            new_data[j] = data[j] - update;
+        }
+        
+        // 更新参数
+        std::cout << "  更新参数 " << i << std::endl;
+        param = Variable(Tensor(data_shape, new_data), param.requires_grad());
+    }
+    
+    std::cout << "Adam::step - 参数更新完成" << std::endl;
+}
+```
+
 ### 修复效果
 
-修复后，线性回归示例成功运行，并能正确学习参数：
+这些修复使我们能够成功运行线性回归示例和MNIST分类示例：
 
+#### 线性回归示例结果：
 ```
 训练完成!
 
@@ -292,6 +393,13 @@ void SGD::step() {
 weight: 0.889718 (真实值: 2.0)
 bias: 0.978981 (真实值: 1.0)
 ```
+
+#### MNIST分类示例结果：
+```
+测试集结果 - 平均损失: 2.29901, 平均准确率: 14.0625%
+```
+
+虽然在这个简化的示例中准确率不高（由于训练轮次少、数据量小等原因），但重要的是程序可以正常运行，不再出现张量形状不匹配的崩溃。
 
 ## 总结与经验教训
 

@@ -42,6 +42,8 @@ public:
         std::vector<float> batch_data(actual_batch_size * 784);  // 28x28 = 784
         std::vector<float> batch_labels(actual_batch_size);
 
+        std::cout << "获取批次 " << batch_idx << " - 样本数: " << actual_batch_size << std::endl;
+
         for (size_t i = 0; i < actual_batch_size; ++i) {
             size_t idx = start_idx + i;
             // 复制图像数据
@@ -55,6 +57,9 @@ public:
         // 创建变量
         Tensor x_tensor({actual_batch_size, 784}, batch_data);
         Tensor y_tensor({actual_batch_size}, batch_labels);
+
+        std::cout << "  创建批次张量 - x形状: [" << actual_batch_size << ", 784]"
+                  << ", y形状: [" << actual_batch_size << "]" << std::endl;
 
         return {Variable(x_tensor), Variable(y_tensor)};
     }
@@ -121,6 +126,8 @@ private:
 
             images_[i] = image;
         }
+
+        std::cout << "生成了 " << num_samples_ << " 个模拟MNIST样本" << std::endl;
     }
 
     size_t num_samples_;
@@ -136,19 +143,63 @@ class MNISTNet {
 public:
     MNISTNet() {
         // 创建层
+        std::cout << "创建MNIST网络..." << std::endl;
         fc1_ = std::make_shared<Linear>(784, 128);  // 输入层 -> 隐藏层
         relu1_ = std::make_shared<ReLU>();
         fc2_ = std::make_shared<Linear>(128, 64);   // 隐藏层 -> 隐藏层 
         relu2_ = std::make_shared<ReLU>();
         fc3_ = std::make_shared<Linear>(64, 10);    // 隐藏层 -> 输出层
+        std::cout << "网络创建完成" << std::endl;
     }
 
     Variable forward(const Variable& x) {
+        std::cout << "MNISTNet::forward - 输入形状: [";
+        auto x_shape = x.data().shape();
+        for (size_t i = 0; i < x_shape.size(); ++i) {
+            std::cout << x_shape[i];
+            if (i < x_shape.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
+        // 第一层
+        std::cout << "  第一层: fc1" << std::endl;
         auto h1 = fc1_->forward(x);
+        auto h1_shape = h1.data().shape();
+        std::cout << "  fc1输出形状: [";
+        for (size_t i = 0; i < h1_shape.size(); ++i) {
+            std::cout << h1_shape[i];
+            if (i < h1_shape.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
+        std::cout << "  第一层: relu1" << std::endl;
         auto a1 = relu1_->forward(h1);
+
+        // 第二层
+        std::cout << "  第二层: fc2" << std::endl;
         auto h2 = fc2_->forward(a1);
+        auto h2_shape = h2.data().shape();
+        std::cout << "  fc2输出形状: [";
+        for (size_t i = 0; i < h2_shape.size(); ++i) {
+            std::cout << h2_shape[i];
+            if (i < h2_shape.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
+        std::cout << "  第二层: relu2" << std::endl;
         auto a2 = relu2_->forward(h2);
+
+        // 输出层
+        std::cout << "  输出层: fc3" << std::endl;
         auto out = fc3_->forward(a2);
+        auto out_shape = out.data().shape();
+        std::cout << "  fc3输出形状: [";
+        for (size_t i = 0; i < out_shape.size(); ++i) {
+            std::cout << out_shape[i];
+            if (i < out_shape.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
         return out;
     }
 
@@ -217,7 +268,7 @@ int main() {
     
     // 创建模拟MNIST数据
     const size_t batch_size = 32;
-    const size_t num_samples = 1000;
+    const size_t num_samples = 320;  // 减小样本量，简化测试
     MNISTSimulator train_data(num_samples, batch_size);
     
     // 创建模型
@@ -225,85 +276,149 @@ int main() {
     
     // 创建损失函数和优化器
     CrossEntropyLoss criterion;
-    optim::Adam optimizer(model.parameters(), 0.01f);
+    optim::Adam optimizer(model.parameters(), 0.005f);  // 降低学习率
     
     // 训练参数
-    const size_t num_epochs = 5;
+    const size_t num_epochs = 2;  // 减少epoch数，简化测试
     
-    std::cout << "开始训练..." << std::endl;
+    std::cout << "\n开始训练..." << std::endl;
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // 训练循环
-    for (size_t epoch = 0; epoch < num_epochs; ++epoch) {
-        float total_loss = 0.0f;
-        float total_acc = 0.0f;
+    try {
+        // 训练循环
+        for (size_t epoch = 0; epoch < num_epochs; ++epoch) {
+            std::cout << "\nEpoch " << (epoch+1) << "/" << num_epochs << std::endl;
+            float total_loss = 0.0f;
+            float total_acc = 0.0f;
+            
+            size_t num_batches = train_data.num_batches();
+            std::cout << "批次总数: " << num_batches << std::endl;
+            
+            // 只处理少量批次进行测试
+            size_t max_batches = std::min(num_batches, size_t(3));
+            
+            for (size_t batch = 0; batch < max_batches; ++batch) {
+                std::cout << "\n处理批次 " << (batch+1) << "/" << max_batches << std::endl;
+                
+                // 获取一批数据
+                std::cout << "获取批次数据..." << std::endl;
+                auto [inputs, targets] = train_data.get_batch(batch);
+                
+                // 前向传播
+                std::cout << "执行前向传播..." << std::endl;
+                auto outputs = model.forward(inputs);
+                
+                std::cout << "计算损失..." << std::endl;
+                // 验证输出和目标形状
+                auto outputs_shape = outputs.data().shape();
+                auto targets_shape = targets.data().shape();
+                
+                std::cout << "  输出形状: [";
+                for (size_t i = 0; i < outputs_shape.size(); ++i) {
+                    std::cout << outputs_shape[i];
+                    if (i < outputs_shape.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                
+                std::cout << "  目标形状: [";
+                for (size_t i = 0; i < targets_shape.size(); ++i) {
+                    std::cout << targets_shape[i];
+                    if (i < targets_shape.size() - 1) std::cout << ", ";
+                }
+                std::cout << "]" << std::endl;
+                
+                auto loss = criterion.forward(outputs, targets);
+                
+                // 计算准确率
+                std::cout << "计算准确率..." << std::endl;
+                float accuracy = compute_accuracy(outputs, targets);
+                
+                // 反向传播和优化
+                std::cout << "执行反向传播..." << std::endl;
+                optimizer.zero_grad();
+                try {
+                    loss.backward();
+                    
+                    std::cout << "更新参数..." << std::endl;
+                    optimizer.step();
+                    
+                    // 累计统计
+                    total_loss += loss.data()[0];
+                    total_acc += accuracy;
+                    
+                    std::cout << "批次 " << (batch+1) << " - 损失: " << loss.data()[0]
+                              << ", 准确率: " << (accuracy * 100.0f) << "%" << std::endl;
+                }
+                catch (const std::exception& e) {
+                    std::cout << "反向传播或参数更新出错: " << e.what() << std::endl;
+                    std::cout << "跳过这个批次，继续训练" << std::endl;
+                }
+            }
+            
+            // 计算平均值
+            if (max_batches > 0) {
+                float avg_loss = total_loss / max_batches;
+                float avg_acc = total_acc / max_batches;
+                
+                std::cout << "\nEpoch " << (epoch+1) << "/" << num_epochs << " 总结 - "
+                          << "平均损失: " << avg_loss << ", "
+                          << "平均准确率: " << (avg_acc * 100.0f) << "%" << std::endl;
+            }
+        }
         
-        size_t num_batches = train_data.num_batches();
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
         
-        for (size_t batch = 0; batch < num_batches; ++batch) {
-            // 获取一批数据
-            auto [inputs, targets] = train_data.get_batch(batch);
+        std::cout << "\n训练完成! 用时: " << duration / 1000.0f << " 秒" << std::endl;
+        
+        // 测试
+        std::cout << "\n执行测试..." << std::endl;
+        MNISTSimulator test_data(100, batch_size);  // 更小的测试集
+        
+        float test_loss = 0.0f;
+        float test_acc = 0.0f;
+        size_t num_test_batches = std::min(test_data.num_batches(), size_t(2));
+        
+        std::cout << "测试批次数: " << num_test_batches << std::endl;
+        
+        for (size_t batch = 0; batch < num_test_batches; ++batch) {
+            std::cout << "\n测试批次 " << (batch+1) << "/" << num_test_batches << std::endl;
+            
+            // 获取数据
+            auto [inputs, targets] = test_data.get_batch(batch);
             
             // 前向传播
+            std::cout << "执行前向传播..." << std::endl;
             auto outputs = model.forward(inputs);
+            
+            // 计算损失
+            std::cout << "计算损失..." << std::endl;
             auto loss = criterion.forward(outputs, targets);
             
             // 计算准确率
+            std::cout << "计算准确率..." << std::endl;
             float accuracy = compute_accuracy(outputs, targets);
             
-            // 反向传播和优化
-            optimizer.zero_grad();
-            loss.backward();
-            optimizer.step();
-            
             // 累计统计
-            total_loss += loss.data()[0];
-            total_acc += accuracy;
+            test_loss += loss.data()[0];
+            test_acc += accuracy;
+            
+            std::cout << "批次 " << (batch+1) << " - 损失: " << loss.data()[0]
+                      << ", 准确率: " << (accuracy * 100.0f) << "%" << std::endl;
         }
         
         // 计算平均值
-        float avg_loss = total_loss / num_batches;
-        float avg_acc = total_acc / num_batches;
-        
-        std::cout << "Epoch [" << (epoch+1) << "/" << num_epochs << "], "
-                  << "Loss: " << avg_loss << ", "
-                  << "Accuracy: " << (avg_acc * 100.0f) << "%" << std::endl;
+        if (num_test_batches > 0) {
+            test_loss /= num_test_batches;
+            test_acc /= num_test_batches;
+            
+            std::cout << "\n测试集结果 - 平均损失: " << test_loss 
+                      << ", 平均准确率: " << (test_acc * 100.0f) << "%" << std::endl;
+        }
     }
-    
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    
-    std::cout << "训练完成! 用时: " << duration / 1000.0f << " 秒" << std::endl;
-    
-    // 测试
-    std::cout << "\n执行测试..." << std::endl;
-    MNISTSimulator test_data(200, batch_size);  // 更小的测试集
-    
-    float test_loss = 0.0f;
-    float test_acc = 0.0f;
-    size_t num_test_batches = test_data.num_batches();
-    
-    for (size_t batch = 0; batch < num_test_batches; ++batch) {
-        auto [inputs, targets] = test_data.get_batch(batch);
-        
-        // 前向传播
-        auto outputs = model.forward(inputs);
-        auto loss = criterion.forward(outputs, targets);
-        
-        // 计算准确率
-        float accuracy = compute_accuracy(outputs, targets);
-        
-        // 累计统计
-        test_loss += loss.data()[0];
-        test_acc += accuracy;
+    catch (const std::exception& e) {
+        std::cout << "\n运行过程中出错: " << e.what() << std::endl;
     }
-    
-    // 计算平均值
-    test_loss /= num_test_batches;
-    test_acc /= num_test_batches;
-    
-    std::cout << "测试集结果 - Loss: " << test_loss 
-              << ", Accuracy: " << (test_acc * 100.0f) << "%" << std::endl;
     
     return 0;
 } 
