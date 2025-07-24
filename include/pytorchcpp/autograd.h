@@ -53,7 +53,7 @@ public:
     
 private:
     struct Impl;
-    std::unique_ptr<Impl> pImpl;  // PIMPL模式
+    std::shared_ptr<Impl> pImpl;  // 修改为shared_ptr以共享实现
     
     // 用于Function访问私有成员
     friend class Function;
@@ -76,6 +76,9 @@ public:
     
     // 反向传播
     virtual std::vector<Tensor> backward(const Tensor& grad_output) = 0;
+    
+    // 获取输入变量
+    const std::vector<Variable>& get_inputs() const { return inputs; }
     
 protected:
     std::vector<Variable> inputs;
