@@ -16,7 +16,15 @@ Optimizer::Optimizer(const std::unordered_map<std::string, Variable>& parameters
 
 void Optimizer::zero_grad() {
     for (auto& param : parameters_) {
-        param.zero_grad();
+        // 只有需要梯度的参数才需要清零
+        if (param.requires_grad()) {
+            // 获取当前梯度的形状，并创建相同形状的零张量
+            auto grad = param.grad();
+            if (grad.numel() > 0) {
+                // 使用全零张量替换梯度
+                param.set_grad(Tensor::zeros(grad.shape()));
+            }
+        }
     }
 }
 
